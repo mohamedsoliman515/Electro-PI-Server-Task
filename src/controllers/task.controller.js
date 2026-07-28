@@ -4,12 +4,28 @@ const { validateTaskInput } = require("../utils/validators");
 const taskService = require("../services/task.service");
 
 /**
- * @route   GET /api/tasks
+ * @route   GET /api/tasks?page=1&limit=10&search=&status=&priority=
  * @access  Private
  */
 const getTasks = asyncHandler(async (req, res) => {
-  const tasks = await taskService.getTasksForUser(req.user._id);
-  res.status(200).json({ success: true, count: tasks.length, data: tasks });
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+  const { search, status, priority } = req.query;
+
+  const result = await taskService.getTasksForUser(req.user._id, {
+    page,
+    limit,
+    search,
+    status,
+    priority,
+  });
+
+  res.status(200).json({
+    success: true,
+    tasks: result.tasks,
+    stats: result.stats,
+    pagination: result.pagination,
+  });
 });
 
 /**

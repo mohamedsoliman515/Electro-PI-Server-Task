@@ -2,10 +2,64 @@ const Task = require("../models/Task");
 const ApiError = require("../utils/ApiError");
 
 /**
- * Returns all tasks belonging to the given user, newest first.
+ * Returns paginated tasks belonging to the given user with optional filters.
  */
-const getTasksForUser = async (userId) => {
-  return Task.find({ user: userId }).sort({ createdAt: -1 });
+const getTasksForUser = async (userId, { page = 1, limit = 10, search, status, priority } = {}) => {
+  const filter = { user: userId };
+
+  if (search) {
+    filter.title = { $regex: search, $options: "i" };
+  }
+  if (status) {
+    filter.status = status;
+  }
+  if (priority) {
+    filter.priority = priority;
+  }
+
+  const skip = (page - 1) * limit;
+  const totalItems = await Task.countDocuments(filter);
+  const tasks = await Task.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit);
+
+  const stats = await Task.aggregate([
+    { $match: { user: userId } },
+    {
+      $group: {
+        _id: null,
+        todo: { $sum: { $cond: [{ $eq: ["$status", "To Do"] }, 1, 0] } },
+        inProgress: { $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] } },
+        done: { $sum: { $cond: [{ $eq: ["$status", "Done"] }, 1, 0] } },
+        overdue: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $ne: ["$status", "Done"] },
+                  { $ne: ["$dueDate", null] },
+                  { $lt: ["$dueDate", new Date()] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ]);
+
+  return {
+    tasks,
+    stats: stats[0] || { todo: 0, inProgress: 0, done: 0, overdue: 0 },
+    pagination: {
+      page,
+      limit,
+      totalItems,
+      totalPages: Math.ceil(totalItems / limit),
+      hasNextPage: page < Math.ceil(totalItems / limit),
+      hasPreviousPage: page > 1,
+    },
+  };
 };
 
 /**
