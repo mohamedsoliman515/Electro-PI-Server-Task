@@ -26,17 +26,19 @@ const getTaskByIdForUser = async (taskId, userId) => {
   return task;
 };
 
-const createTask = async ({ title, description }, userId) => {
-  return Task.create({ title, description, user: userId });
+const createTask = async ({ title, description, status, priority, dueDate }, userId) => {
+  return Task.create({ title, description, status, priority, dueDate, user: userId });
 };
 
 const updateTask = async (taskId, updates, userId) => {
-  const task = await getTaskByIdForUser(taskId, userId); // enforces ownership
+  const task = await getTaskByIdForUser(taskId, userId);
 
-  const { title, description, completed } = updates;
-  if (title !== undefined) task.title = title;
-  if (description !== undefined) task.description = description;
-  if (completed !== undefined) task.completed = completed;
+  const allowed = ["title", "description", "status", "priority", "dueDate"];
+  for (const key of allowed) {
+    if (updates[key] !== undefined) {
+      task[key] = updates[key];
+    }
+  }
 
   await task.save();
   return task;
